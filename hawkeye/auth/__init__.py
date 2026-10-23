@@ -1,0 +1,1 @@
+# HawkEye-AI auth module

@@ -29,6 +29,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from auth.roles import can_dismiss_alert, get_role_permissions
 from pipeline.ingest import verify_batch
+from pipeline.score import risk_score
+from pipeline.threat_intel import map_mitre_and_cia
+from pipeline.playbooks import generate_playbook
+from pipeline.explain import explain_alert
 
 
 # ---------------------------------------------------------------------------
@@ -386,8 +390,9 @@ def main():
     # -----------------------------------------------------------------------
     # Main Tabs: SOC Alert Triage | Geo Threat Map | AI/ML Benchmarks | Cryptography
     # -----------------------------------------------------------------------
-    tab_alerts, tab_map, tab_benchmark, tab_integrity = st.tabs([
+    tab_alerts, tab_live_severity, tab_map, tab_benchmark, tab_integrity = st.tabs([
         "🚨 SOC Alert Triage",
+        "⚡ Live Severity & Triage Simulator",
         "🗺️ Threat Intelligence Map",
         "📊 AI / ML Model Benchmark",
         "🔐 Cryptographic Integrity",
@@ -469,11 +474,24 @@ def main():
                     exp_col1, exp_col2 = st.columns([1, 1])
 
                     with exp_col1:
-                        explanation = row.get("explanation", "")
-                        if explanation:
-                            with st.expander(f"🤖 AI Analyst Explanation", expanded=False):
+                        # Check session state override first
+                        current_exp = st.session_state.get(f"exp_{idx}", row.get("explanation", ""))
+                        is_fallback = not current_exp or "[LLM unavailable]" in current_exp
+
+                        with st.expander(f"🤖 AI Analyst Explanation", expanded=not is_fallback):
+                            if is_fallback:
+                                st.caption("No cached explanation found for this alert.")
+                                if st.button("✨ Generate Explanation with Gemini", key=f"btn_exp_{idx}", use_container_width=True):
+                                    with st.spinner("Analyzing telemetry with Gemini..."):
+                                        new_explanation = explain_alert(row)
+                                        st.session_state[f"exp_{idx}"] = new_explanation
+                                        st.rerun()
+                            else:
                                 st.markdown(
-                                    f'<p style="font-size:0.92rem; line-height:1.6; color:#e2e8f0; margin:0;">{explanation}</p>',
+                                    f'<div style="background:#0f172a; border-left:3px solid #38bdf8; border-radius:6px; padding:0.8rem 1rem;">'
+                                    f'<span style="font-size:0.75rem; font-weight:600; color:#38bdf8; text-transform:uppercase; letter-spacing:0.05em;">Google Gemini Analysis</span>'
+                                    f'<p style="font-size:0.92rem; line-height:1.5; color:#e2e8f0; margin:0.4rem 0 0 0;">{current_exp}</p>'
+                                    f'</div>',
                                     unsafe_allow_html=True,
                                 )
 
@@ -520,7 +538,192 @@ def main():
                 )
 
     # -----------------------------------------------------------------------
-    # TAB 2: Threat Intelligence Map (Bonus)
+    # TAB 2: Live Severity & Triage Simulator
+    # -----------------------------------------------------------------------
+    with tab_live_severity:
+        st.markdown("### ⚡ Live Network Log Triage & Severity Calculator")
+        st.caption("Simulate an incoming live cloud packet or attack vector to dynamically compute its Severity Score (1-5), Likelihood vs. Impact breakdown, MITRE ATT&CK mapping, and automated SOAR remediation playbooks.")
+
+        sim_col1, sim_col2, sim_col3 = st.columns(3)
+        with sim_col1:
+            st.markdown("##### 🌐 Network Identifiers")
+            sim_src = st.text_input("Source IP (Attacker)", value="192.168.1.105")
+            sim_dst = st.text_input("Target IP (Cloud VPC)", value="10.0.0.15")
+            sim_proto = st.selectbox("Protocol", ["tcp", "udp", "icmp", "ospf"], index=0)
+            sim_service = st.selectbox(
+                "Target Service",
+                ["ssh", "telnet", "ftp", "http", "dns", "smtp", "private", "other"],
+                index=0,
+            )
+            sim_flag = st.selectbox(
+                "TCP Connection Flag",
+                ["S0 (SYN Flood / Probe)", "SF (Normal Established)", "REJ (Rejected)", "RSTO (Reset Out)", "RSTR (Reset Resp)"],
+                index=0,
+            )
+            flag_code = sim_flag.split(" ")[0]
+
+        with sim_col2:
+            st.markdown("##### 📦 Traffic Metrics & Telemetry")
+            sim_bytes_sent = st.number_input("Bytes Sent (Client → Server)", min_value=0, max_value=10000000, value=65000, step=1000)
+            sim_bytes_recv = st.number_input("Bytes Received (Server → Client)", min_value=0, max_value=10000000, value=120, step=10)
+            sim_failed_logins = st.number_input("Failed Login Attempts", min_value=0, max_value=50, value=3, step=1)
+            sim_root_shell = st.checkbox("Root Shell / SU Escalation Attempted", value=False)
+
+        with sim_col3:
+            st.markdown("##### 🧠 AI/ML Anomaly Parameters")
+            sim_anomaly_score = st.slider(
+                "Isolation Forest Anomaly Score",
+                min_value=-0.50,
+                max_value=0.20,
+                value=-0.38,
+                step=0.01,
+                help="More negative indicates extreme statistical outlier / anomaly. Positive indicates normal traffic.",
+            )
+            sim_label = st.selectbox(
+                "Heuristic Attack Label",
+                ["probe", "dos", "exploits", "backdoor", "fuzzers", "normal"],
+                index=0,
+            )
+
+        calc_btn = st.button("🔥 Compute Live Severity & Triage Incident", use_container_width=True, type="primary")
+
+        if calc_btn:
+            sim_row = pd.Series({
+                "src": sim_src,
+                "dst": sim_dst,
+                "protocol": sim_proto,
+                "protocol_type": sim_proto,
+                "protocol_type_original": sim_proto,
+                "service": sim_service,
+                "service_original": sim_service,
+                "flag": flag_code,
+                "flag_original": flag_code,
+                "bytes_sent": sim_bytes_sent,
+                "bytes_recv": sim_bytes_recv,
+                "src_bytes": sim_bytes_sent,
+                "dst_bytes": sim_bytes_recv,
+                "num_failed_logins": sim_failed_logins,
+                "root_shell": 1 if sim_root_shell else 0,
+                "su_attempted": 1 if sim_root_shell else 0,
+                "anomaly_score": sim_anomaly_score,
+                "label": sim_label,
+            })
+
+            # 1. Compute dynamic severity
+            live_sev = risk_score(sim_row)
+            sim_row["severity"] = live_sev
+
+            # 2. Enrich with MITRE ATT&CK and CIA Triad
+            mitre_cia = map_mitre_and_cia(sim_row.to_dict())
+
+            # 3. Generate SOAR Playbook
+            playbook = generate_playbook({**sim_row.to_dict(), **mitre_cia, "severity": live_sev})
+
+            # 4. Generate AI Explanation
+            with st.spinner("🤖 AI Analyst (Google Gemini) analyzing live packet telemetry..."):
+                explanation = explain_alert(sim_row)
+
+            # Display Results
+            st.markdown("---")
+            st.markdown("#### 🎯 Real-Time Incident Assessment Result")
+
+            k1, k2, k3, k4 = st.columns(4)
+            sev_color = SEVERITY_COLORS.get(live_sev, "#ff4b4b")
+            sev_label = SEVERITY_LABELS.get(live_sev, f"Sev-{live_sev}")
+
+            with k1:
+                st.markdown(
+                    f'<div class="metric-card" style="border-color:{sev_color};">'
+                    f'<p class="metric-value" style="color:{sev_color};">Level {live_sev}</p>'
+                    f'<p class="metric-label">Calculated Severity ({sev_label})</p>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with k2:
+                if sim_anomaly_score <= -0.4:
+                    lik_val = 5.0
+                elif sim_anomaly_score <= -0.25:
+                    lik_val = 4.0
+                elif sim_anomaly_score <= -0.1:
+                    lik_val = 3.0
+                elif sim_anomaly_score <= 0:
+                    lik_val = 2.0
+                else:
+                    lik_val = 1.0
+                st.markdown(
+                    f'<div class="metric-card">'
+                    f'<p class="metric-value" style="color:#38bdf8;">{lik_val} / 5.0</p>'
+                    f'<p class="metric-label">Likelihood (60% Weight)</p>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with k3:
+                imp_val = 1.0
+                if sim_service in ["telnet", "ftp", "ftp_data", "ssh", "shell", "login"]:
+                    imp_val += 1.5
+                elif sim_service in ["http", "smtp", "dns"]:
+                    imp_val += 0.5
+                if (sim_bytes_sent + sim_bytes_recv) >= 50000:
+                    imp_val += 2.0
+                elif (sim_bytes_sent + sim_bytes_recv) >= 10000:
+                    imp_val += 1.0
+                if sim_failed_logins > 0:
+                    imp_val += min(sim_failed_logins * 0.3, 1.5)
+                if sim_root_shell:
+                    imp_val += 1.5
+                imp_val = min(imp_val, 5.0)
+
+                st.markdown(
+                    f'<div class="metric-card">'
+                    f'<p class="metric-value" style="color:#fb923c;">{imp_val:.1f} / 5.0</p>'
+                    f'<p class="metric-label">Impact (40% Weight)</p>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with k4:
+                cia_impact = mitre_cia.get("cia_impact", "Availability")
+                st.markdown(
+                    f'<div class="metric-card">'
+                    f'<p class="metric-value" style="color:#a855f7;">{cia_impact}</p>'
+                    f'<p class="metric-label">Primary CIA Triad Impact</p>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Mathematical Formula Callout
+            st.info(
+                f"🧮 **Severity Formula**: `clamp(round(Likelihood × 0.6 + Impact × 0.4), 1, 5)` "
+                f"➔ `round({lik_val} × 0.6 + {imp_val:.1f} × 0.4)` = `round({(lik_val * 0.6) + (imp_val * 0.4):.2f})` = **Severity {live_sev}**"
+            )
+
+            # AI Explanation Callout
+            st.markdown(
+                f'<div style="background:#131826; border-left:4px solid #38bdf8; border-radius:8px; padding:1rem 1.2rem; margin:1rem 0;">'
+                f'<span style="font-weight:600; color:#38bdf8;">🤖 AI Triage Explanation (Google Gemini):</span><br>'
+                f'<span style="color:#e2e8f0; font-size:0.95rem;">{explanation}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            # MITRE & SOAR in two columns
+            col_mitre, col_soar = st.columns(2)
+            with col_mitre:
+                st.markdown("##### 🎯 MITRE ATT&CK Matrix Alignment")
+                st.markdown(f"- **Tactic**: `{mitre_cia.get('mitre_tactic', 'Discovery')}` ({mitre_cia.get('mitre_tactic_id', 'TA0007')})")
+                st.markdown(f"- **Technique**: `{mitre_cia.get('mitre_technique_name', 'Network Service Discovery')}` ([{mitre_cia.get('mitre_technique_id', 'T1046')}]({mitre_cia.get('mitre_url', '#')}))")
+                st.markdown(f"- **Connection State**: Flag `{flag_code}` on destination port `{sim_service}`")
+
+            with col_soar:
+                st.markdown("##### 🛡️ Automated SOAR Incident Response Playbook")
+                st.caption("One-click copyable firewall mitigation commands:")
+                st.code(playbook.get("iptables", ""), language="bash")
+                st.caption("AWS EC2 Cloud Security Group Revocation:")
+                st.code(playbook.get("aws_cli", ""), language="bash")
+
+    # -----------------------------------------------------------------------
+    # TAB 3: Threat Intelligence Map (Bonus)
     # -----------------------------------------------------------------------
     with tab_map:
         st.markdown("### 🗺️ Global Cyber Attack Origin & Telemetry Map")

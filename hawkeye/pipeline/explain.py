@@ -19,6 +19,28 @@ except ImportError:
 # Gemini configuration
 GEMINI_MODEL = "gemini-3.6-flash"
 
+# Auto-load GEMINI_API_KEY from .env if not already in environment
+if "GEMINI_API_KEY" not in os.environ:
+    _candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env"),
+    ]
+    for _env_path in _candidates:
+        if os.path.exists(_env_path):
+            try:
+                with open(_env_path, "r", encoding="utf-8") as _f:
+                    for _line in _f:
+                        _line = _line.strip()
+                        if _line.startswith("GEMINI_API_KEY="):
+                            _key = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                            if _key:
+                                os.environ["GEMINI_API_KEY"] = _key
+                                break
+            except Exception:
+                pass
+        if "GEMINI_API_KEY" in os.environ:
+            break
+
 # Path for persisting the explanation cache between runs
 _CACHE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "alerts_cache.json"

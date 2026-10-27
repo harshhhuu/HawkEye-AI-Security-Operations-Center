@@ -46,3 +46,7 @@ desktop.ini
 .terraform/
 .terraform.lock.hcl
 *.exe
+
+# Temporary office and scratch files
+~$*.docx
+scratch/

@@ -33,6 +33,8 @@ from pipeline.score import risk_score
 from pipeline.threat_intel import map_mitre_and_cia
 from pipeline.playbooks import generate_playbook
 from pipeline.explain import explain_alert
+from cloud.aws_remediation import AWSRemediationEngine
+from cloud.aws_s3 import archive_alerts_to_s3
 
 
 # ---------------------------------------------------------------------------
@@ -390,8 +392,9 @@ def main():
     # -----------------------------------------------------------------------
     # Main Tabs: SOC Alert Triage | Geo Threat Map | AI/ML Benchmarks | Cryptography
     # -----------------------------------------------------------------------
-    tab_alerts, tab_live_severity, tab_map, tab_benchmark, tab_integrity = st.tabs([
+    tab_alerts, tab_cloud, tab_live_severity, tab_map, tab_benchmark, tab_integrity = st.tabs([
         "🚨 SOC Alert Triage",
+        "☁️ AWS Cloud Telemetry & SOAR",
         "⚡ Live Severity & Triage Simulator",
         "🗺️ Threat Intelligence Map",
         "📊 AI / ML Model Benchmark",
@@ -538,7 +541,174 @@ def main():
                 )
 
     # -----------------------------------------------------------------------
-    # TAB 2: Live Severity & Triage Simulator
+    # TAB: AWS Cloud Telemetry & SOAR
+    # -----------------------------------------------------------------------
+    with tab_cloud:
+        st.markdown("### ☁️ AWS Cloud Security Operations & Telemetry Center")
+        st.caption("Native AWS VPC Flow Log Ingestion, Multi-Region Cloud Anomaly Detection, CIS AWS Benchmark Compliance, and Automated Boto3 Cloud SOAR Remediation.")
+
+        # Cloud Architecture KPIs
+        c_kpi1, c_kpi2, c_kpi3, c_kpi4 = st.columns(4)
+        with c_kpi1:
+            st.markdown(
+                '<div class="metric-card">'
+                '<p class="metric-value" style="color:#38bdf8;">3 VPCs</p>'
+                '<p class="metric-label">Monitored Cloud VPCs</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        with c_kpi2:
+            st.markdown(
+                '<div class="metric-card">'
+                '<p class="metric-value" style="color:#a855f7;">4 Regions</p>'
+                '<p class="metric-label">us-east-1, ap-south-1, eu-west-1, us-west-2</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        with c_kpi3:
+            st.markdown(
+                '<div class="metric-card">'
+                '<p class="metric-value" style="color:#ef4444;">i-0a87612f</p>'
+                '<p class="metric-label">Flagged Workload (EC2)</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        with c_kpi4:
+            st.markdown(
+                '<div class="metric-card">'
+                '<p class="metric-value" style="color:#22c55e;">Zero-Trust</p>'
+                '<p class="metric-label">Quarantine SG Ready</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_cloud_left, col_cloud_right = st.columns([1.1, 0.9])
+
+        with col_cloud_left:
+            st.markdown("#### 📡 Cloud Threat Intelligence & Ingested Telemetry")
+            st.markdown("""
+            HawkEye monitors real-time telemetry across AWS Infrastructure:
+            - **AWS VPC Flow Logs (v2)**: Capturing inter-subnet traffic, dropped ingress packets, and suspicious outbound tunnels.
+            - **AWS CloudTrail Management Events**: Monitoring IAM privilege escalations, unauthorized security group alterations, and sensitive S3 bucket policy mutations.
+            """)
+
+            # Sample or Filtered Cloud Incidents
+            cloud_incidents_data = [
+                {
+                    "Incident": "S3 Data Exfiltration",
+                    "Target Resource": "arn:aws:s3:::hawkeye-finance-records-2026",
+                    "Source Workload": "i-0a87612f0b9e812d4 (us-east-1)",
+                    "Threat Vector": "T1530: Cloud Storage Exfiltration",
+                    "Severity": "🔴 Critical (Sev 5)",
+                    "Status": "ACTIVE",
+                },
+                {
+                    "Incident": "EC2 Cryptomining (Stratum Pool)",
+                    "Target Resource": "i-0f987213bc45a6789 (ap-south-1)",
+                    "Source Workload": "EC2 Worker Subnet (Port 3333)",
+                    "Threat Vector": "T1496: Cloud Resource Hijacking",
+                    "Severity": "🔴 Critical (Sev 4)",
+                    "Status": "ACTIVE",
+                },
+                {
+                    "Incident": "Permissive SG Ingress 0.0.0.0/0",
+                    "Target Resource": "sg-07e15fa8c9b421a10 (vpc-07e15fa8)",
+                    "Source Workload": "Port 22/3389 Ingress Probe",
+                    "Threat Vector": "T1562.007: Disable Cloud Tools",
+                    "Severity": "🟠 High (Sev 3)",
+                    "Status": "INVESTIGATING",
+                },
+                {
+                    "Incident": "IAM Privilege Escalation Attempt",
+                    "Target Resource": "arn:aws:iam::123456789012:user/developer-temp",
+                    "Source Workload": "AttachUserPolicy (AdministratorAccess)",
+                    "Threat Vector": "T1078.004: Cloud IAM Accounts",
+                    "Severity": "🟠 High (Sev 3)",
+                    "Status": "INVESTIGATING",
+                },
+            ]
+            st.dataframe(pd.DataFrame(cloud_incidents_data), use_container_width=True, hide_index=True)
+
+            st.markdown("#### 🛡️ CIS AWS Foundations Benchmark Compliance")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.success("✅ **CIS 1.4**: Root account MFA enabled and active")
+                st.success("✅ **CIS 3.1**: CloudTrail enabled across all AWS regions")
+                st.success("✅ **CIS 3.9**: VPC Flow Logs active on all 3 VPCs")
+            with c2:
+                st.warning("⚠️ **CIS 4.1**: Security Group allows 0.0.0.0/0 on port 22")
+                st.warning("⚠️ **CIS 2.1**: S3 bucket public access block missing on 1 bucket")
+                st.info("ℹ️ **CIS 1.16**: IAM access keys rotated within 90 days")
+
+        with col_cloud_right:
+            st.markdown("#### ⚡ Interactive AWS Cloud SOAR Remediation")
+            st.caption("Execute automated cloud security containment via Python Boto3 SDK or simulated zero-trust isolation.")
+
+            remediation_engine = AWSRemediationEngine()
+
+            action_type = st.selectbox(
+                "Select AWS Containment Action",
+                [
+                    "🛡️ EC2 Instance Isolation (Quarantine Security Group)",
+                    "🔐 Deactivate Compromised IAM Access Key",
+                    "🪣 Lockdown S3 Bucket (Enforce Public Access Block)",
+                    "🚫 Block Attacker via VPC Network ACL Ingress Rule",
+                ],
+            )
+
+            exec_mode = st.radio(
+                "Execution Mode",
+                ["Simulation Mode (Dry Run - Zero Cloud Cost)", "Live AWS Boto3 Execution"],
+                index=0,
+                horizontal=True,
+            )
+            is_dry_run = "Dry Run" in exec_mode
+
+            if "EC2" in action_type:
+                target_ec2 = st.text_input("Target EC2 Instance ID", value="i-0a87612f0b9e812d4")
+                target_vpc = st.text_input("VPC ID", value="vpc-07e15fa8c9b421a10")
+            elif "IAM" in action_type:
+                target_user = st.text_input("IAM Username", value="developer-temp")
+                target_key = st.text_input("AWS Access Key ID", value="AKIAIOSFODNN7EXAMPLE")
+            elif "S3" in action_type:
+                target_bucket = st.text_input("S3 Bucket Name", value="hawkeye-finance-records-2026")
+            else:
+                target_nacl = st.text_input("VPC Network ACL ID", value="acl-09823412")
+                target_ip = st.text_input("Attacker IP Address to Block", value="185.220.101.5")
+
+            if permissions.get("can_execute_playbook", False):
+                if st.button("🚀 Execute Cloud Remediation Now", type="primary", use_container_width=True):
+                    with st.spinner("Dispatching AWS Cloud SOAR API Request..."):
+                        if "EC2" in action_type:
+                            receipt = remediation_engine.quarantine_ec2_instance(target_ec2, target_vpc, dry_run=is_dry_run)
+                        elif "IAM" in action_type:
+                            receipt = remediation_engine.revoke_iam_credentials(target_user, target_key, dry_run=is_dry_run)
+                        elif "S3" in action_type:
+                            receipt = remediation_engine.block_s3_public_access(target_bucket, dry_run=is_dry_run)
+                        else:
+                            receipt = remediation_engine.block_vpc_nacl_ip(target_nacl, target_ip, dry_run=is_dry_run)
+
+                    st.success(f"Execution Completed: {receipt.get('action')}")
+                    st.json(receipt)
+            else:
+                st.warning("🔒 Admin role required to execute AWS Cloud Remediation.")
+
+            st.markdown("---")
+            st.markdown("#### 📦 AWS S3 Cryptographic Batch Archival")
+            st.caption("Archive current alert batch with SHA-256 batch hash and AWS KMS server-side encryption.")
+            if st.button("📤 Archive Incident Batch to S3 (KMS Encrypted)", use_container_width=True):
+                s3_receipt = archive_alerts_to_s3(
+                    {"metadata": metadata, "alerts": filtered_df.to_dict(orient="records")},
+                    bucket_name="hawkeye-soc-incident-archives",
+                    dry_run=is_dry_run,
+                )
+                st.info(f"S3 URI: {s3_receipt.get('s3_uri')}")
+                st.json(s3_receipt)
+
+    # -----------------------------------------------------------------------
+    # TAB 3: Live Severity & Triage Simulator
     # -----------------------------------------------------------------------
     with tab_live_severity:
         st.markdown("### ⚡ Live Network Log Triage & Severity Calculator")

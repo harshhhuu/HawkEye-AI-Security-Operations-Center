@@ -12,6 +12,7 @@ from sklearn.ensemble import IsolationForest
 DETECTION_FEATURES = [
     "duration",
     "bytes_sent", "bytes_recv",
+    "packets", "src_port", "dst_port",
     "land", "wrong_fragment", "urgent",
     "hot", "num_failed_logins", "logged_in",
     "count", "srv_count",

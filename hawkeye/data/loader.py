@@ -162,12 +162,26 @@ def load_logs(path: str, fmt: str = "auto", sample_size: int = None) -> pd.DataF
     if fmt == "auto":
         if "unsw" in path_lower or "nb15" in path_lower:
             fmt = "unsw-nb15"
+        elif "vpc" in path_lower or "aws" in path_lower or "cloud" in path_lower:
+            fmt = "aws-cloud"
         elif path_lower.endswith(".txt") or "kdd" in path_lower:
             fmt = "nsl-kdd"
         else:
             fmt = "csv"
 
-    if fmt == "unsw-nb15":
+    if fmt == "aws-cloud" or fmt == "aws-vpc":
+        from data.cloud_telemetry import load_aws_vpc_flow_logs
+        if path_lower.endswith(".csv"):
+            df = pd.read_csv(path)
+            if "cloud_provider" not in df.columns:
+                df["cloud_provider"] = "AWS"
+            if sample_size and sample_size > 0 and len(df) > sample_size:
+                df = df.sample(n=sample_size, random_state=42).reset_index(drop=True)
+            df = _add_synthetic_metadata(df)
+            return df
+        return load_aws_vpc_flow_logs(path, sample_size=sample_size)
+
+    elif fmt == "unsw-nb15":
         return load_unsw_nb15(path, sample_size=sample_size)
 
     elif fmt == "nsl-kdd":
@@ -252,17 +266,23 @@ def try_load(data_dir: str = None, sample_size: int = 2000) -> pd.DataFrame:
         print(f"[loader] Loading NSL-KDD dataset from {nsl_path}")
         return load_logs(nsl_path, fmt="nsl-kdd", sample_size=sample_size)
 
-    # 3. Try synthetic CSV
+    # 3. Try AWS Cloud Telemetry
+    cloud_path = os.path.join(data_dir, "aws_cloud_sample.csv")
+    if os.path.exists(cloud_path):
+        print(f"[loader] Loading AWS Cloud Telemetry from {cloud_path}")
+        return load_logs(cloud_path, fmt="aws-cloud", sample_size=sample_size)
+
+    # 4. Try synthetic CSV
     synth_path = os.path.join(data_dir, "synthetic_logs.csv")
     if os.path.exists(synth_path):
         print(f"[loader] Loading synthetic logs from {synth_path}")
         return load_logs(synth_path, fmt="csv")
 
-    # 4. Generate synthetic on the fly
-    print("[loader] No dataset found — generating synthetic logs...")
-    from data.synthetic import generate_synthetic
+    # 5. Generate AWS cloud telemetry on the fly
+    print("[loader] No dataset found — generating AWS cloud telemetry logs...")
+    from data.cloud_telemetry import generate_aws_cloud_dataset
 
-    df = generate_synthetic(500)
-    df.to_csv(synth_path, index=False)
-    print(f"[loader] Saved synthetic logs to {synth_path}")
+    df = generate_aws_cloud_dataset(500)
+    df.to_csv(cloud_path, index=False)
+    print(f"[loader] Saved AWS cloud logs to {cloud_path}")
     return df

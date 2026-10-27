@@ -39,3 +39,10 @@ desktop.ini
 
 # Logs and runtime caches
 *.log
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.exe

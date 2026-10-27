@@ -67,6 +67,9 @@ def run_pipeline(
 
     # --- Step 1: Load Data ---
     print("[1/5] Loading log data...")
+    if data_fmt in ("aws-cloud", "aws-vpc") and not data_path:
+        data_path = os.path.join(project_root, "data", "aws_cloud_sample.csv")
+
     if data_path:
         fmt = data_fmt or "auto"
         df = load_logs(data_path, fmt=fmt, sample_size=effective_sample)
@@ -196,8 +199,8 @@ def main():
         "--data-fmt",
         type=str,
         default=None,
-        choices=["unsw-nb15", "nsl-kdd", "csv", "auto"],
-        help="Data format (auto-detected if not specified).",
+        choices=["unsw-nb15", "nsl-kdd", "aws-cloud", "aws-vpc", "csv", "auto"],
+        help="Data format: unsw-nb15, nsl-kdd, aws-cloud, aws-vpc, or auto.",
     )
     parser.add_argument(
         "--sample-size",

@@ -1,0 +1,66 @@
+# ==============================================================================
+# HawkEye-AI — Docker Compose Multi-Container Cloud Architecture
+# ==============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Service 1: SOC Intelligence Dashboard (Streamlit Frontend)
+  # ---------------------------------------------------------------------------
+  soc-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hawkeye-soc-dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-""}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - HAWKEYE_ENV=production
+    volumes:
+      - ./alerts.json:/app/alerts.json:ro
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - hawkeye-cloud-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # Service 2: Background Anomaly Detection & Cloud Ingestion Pipeline
+  # ---------------------------------------------------------------------------
+  pipeline-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hawkeye-pipeline-worker
+    restart: unless-stopped
+    command: ["python", "main.py", "--sample-size", "1000"]
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-""}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - HAWKEYE_ENV=production
+    volumes:
+      - .:/app
+    networks:
+      - hawkeye-cloud-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+networks:
+  hawkeye-cloud-net:
+    driver: bridge

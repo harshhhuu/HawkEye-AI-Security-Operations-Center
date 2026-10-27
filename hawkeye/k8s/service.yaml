@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hawkeye-soc-service
+  namespace: hawkeye-soc
+  labels:
+    app: hawkeye-soc
+spec:
+  type: LoadBalancer
+  selector:
+    app: hawkeye-soc
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8501
+      protocol: TCP
